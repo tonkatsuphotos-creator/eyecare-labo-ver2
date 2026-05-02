@@ -1,0 +1,51 @@
+name: 記事自動生成
+
+on:
+  schedule:
+    # 毎月20日 9:00 JST（= 0:00 UTC）
+    - cron: '0 0 20 * *'
+  # GitHub Actions画面から手動実行も可能
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Python 依存パッケージをインストール
+        run: pip install requests python-dotenv
+
+      - name: Node.js をセットアップ（Claude Code CLI 用）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Claude Code CLI をインストール
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: 記事を生成
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python tools/generate_article.py
+
+      - name: 生成した記事をコミット・プッシュ
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add articles/
+          # 差分がある場合のみコミット（ネタストックなし等で変更がない場合はスキップ）
+          git diff --cached --quiet || git commit -m "feat: 記事自動生成 $(date +'%Y年%m月')"
+          git push
