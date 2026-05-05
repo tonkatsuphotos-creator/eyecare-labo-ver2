@@ -233,7 +233,7 @@ def generate_article_with_claude(prompt: str) -> str:
             ["claude", "-p", prompt],
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=600,
         )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
@@ -298,7 +298,7 @@ def main():
     print(f"  ターゲット : {meta['target']}")
 
     # Step 2: Claude Codeで記事生成
-    print("\n[2/5] Claude Codeで記事を生成中...（最大3分）")
+    print("\n[2/5] Claude Codeで記事を生成中...（最大10分）")
     prompt = build_prompt(meta)
     raw_output = generate_article_with_claude(prompt)
     article_content = clean_output(raw_output)
