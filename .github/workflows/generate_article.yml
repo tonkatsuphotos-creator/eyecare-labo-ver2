@@ -13,7 +13,7 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: リポジトリをチェックアウト
@@ -25,7 +25,7 @@ jobs:
           python-version: '3.11'
 
       - name: Python 依存パッケージをインストール
-        run: pip install requests python-dotenv
+        run: pip install requests python-dotenv openai
 
       - name: Node.js をセットアップ（Claude Code CLI 用）
         uses: actions/setup-node@v4
@@ -49,11 +49,17 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python tools/generate_article.py
 
-      - name: 生成した記事をコミット・プッシュ
+      - name: 画像を生成
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python tools/generate_image.py
+
+      - name: 生成した記事・画像をコミット・プッシュ
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add articles/
+          git add articles/ images/
           # 差分がある場合のみコミット（ネタストックなし等で変更がない場合はスキップ）
-          git diff --cached --quiet || git commit -m "feat: 記事自動生成 $(date +'%Y年%m月')"
+          git diff --cached --quiet || git commit -m "feat: 記事・画像自動生成 $(date +'%Y年%m月')"
           git push
