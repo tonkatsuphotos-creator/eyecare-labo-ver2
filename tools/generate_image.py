@@ -7,10 +7,7 @@ Usage:
 """
 
 import base64
-import json
 import os
-import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -39,35 +36,25 @@ IMAGES_DIR = PROJECT_ROOT / "images"
 IMAGE_SIZE = "1536x1024"
 
 IMAGE_BASE_PROMPT = """\
-Instagram投稿用の横長サムネイル画像（16:9）。日本の整体・アイケア・健康系コラム向けデザイン。
-実写は禁止、すべてイラストで統一。生成AI特有の不自然な質感は避ける。
+以下の記事本文を読んで、内容に合ったInstagram投稿用の横長サムネイル画像を生成してください。
 
-【線質・スタイル】
-手描き風の線に強弱をつけ、ペン画のような温かみのある線質で描く。フラットすぎるベタ塗りではなく、\
-ハッチングや細かいテクスチャを加えてアナログ感を出す。
+【記事本文】
+{article_text}
 
-【レイアウト・構成】
-左エリアに人物イラスト（シーンに合った表情・ポーズ）、右エリアにメインコピーとフロー図を配置。\
-背景は薄いパステルグラデーション（例：空色→白）に生活シーンの要素（デスク・窓・観葉植物など）を\
-うっすら描き込んで情報密度を上げる。余白を適度に埋め、のっぺりした印象を避ける。
-
-【フロー図（必須）】
-①②③の3ステップを矢印（→）でつないだフロー図を必ず含める。\
-各ステップは丸囲み数字＋短いラベル（10字以内）で表記し、ステップ間に手描き風の曲線矢印を添える。
-
-【アイコン・装飾】
-目・筋肉・矢印・星・ハート・稲妻・吹き出しなど複数の小アイコンを画面各所に散りばめる（6〜10個程度）。\
-重要キーワードは丸囲みまたは手描き吹き出しで強調する。
-
-【色使い】
-パステルカラー（水色・クリーム・薄緑・ラベンダー）をベースに、\
-珊瑚色またはレモンイエローを1〜2色の強調色として使いメリハリをつける。\
-文字は濃いネイビーまたはチャコールで可読性を確保する。
-
-【テキスト】
-メインコピー：「{title}」（最大フォントサイズで中央〜右寄りに配置）
-シーン：{scene}
-補足ポイント（フロー図の各ステップに対応）：{points}\
+【画像デザイン指示】
+・横長16:9
+・手描き風イラスト、線に強弱あり、ペン画のような温かみのある線質
+・実写禁止、すべてイラスト
+・白背景ベース＋パステルカラー、珊瑚色orレモンイエローで1〜2色強調
+・記事のメインコピーを大きく配置
+・左側に人物イラスト（記事が想定するシーン・人物像に合わせる）
+・右側に①②③の矢印付きフロー図（記事の3つのポイントを対応させる）
+・目・星・ハート・稲妻など小アイコンを6〜10個散りばめる
+・重要キーワードは丸囲みや吹き出しで強調
+・背景に薄いパステルグラデーションと生活シーンの要素（デスク・窓・観葉植物など）
+・40〜50代女性に向けた落ち着いた雰囲気
+・広告感を弱める
+・アクセス情報「新宿区・四ツ谷駅から徒歩4分、新宿駅からも1駅、市ヶ谷や麹町、曙橋からもアクセス抜群」を画像の隅に小さく入れる\
 """
 
 
@@ -83,64 +70,11 @@ def find_latest_article() -> Path:
     return articles[0]
 
 
-# ── 記事から情報抽出 ──────────────────────────────────────
-
-
-def extract_article_info(article_text: str) -> dict:
-    """Claude CLIを使って記事からタイトル・シーン・ポイントを抽出する"""
-    prompt = f"""以下の記事から画像生成に使う情報を抽出してください。
-
-## 記事本文
-{article_text}
-
-## 抽出項目
-- title: 読者の悩みを表す短いキャッチコピー（15字以内、記事の核心を一言で）
-- scene: 記事が想定するシーン・状況（例：夕方のオフィスでパソコン作業中の30代女性）
-- points: 施術・改善の3つのポイント（各15字以内、箇条書き3件）
-
-## 出力形式
-JSONのみ出力する。説明文・前置き・コードブロック記号（```）は不要。
-
-{{
-  "title": "...",
-  "scene": "...",
-  "points": ["...", "...", "..."]
-}}
-"""
-    result = subprocess.run(
-        ["claude", "-p", prompt],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        print(f"[エラー] Claude実行失敗:\n{result.stderr}", file=sys.stderr)
-        sys.exit(1)
-
-    output = re.sub(r"```[^\n]*\n?", "", result.stdout.strip()).strip()
-    match = re.search(r"\{.*\}", output, re.DOTALL)
-    if not match:
-        print(f"[エラー] JSON取得失敗:\n{output}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        return json.loads(match.group())
-    except json.JSONDecodeError as e:
-        print(f"[エラー] JSONパース失敗: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
 # ── 画像生成 ──────────────────────────────────────────────
 
 
-def build_image_prompt(info: dict) -> str:
-    points = info.get("points", [])
-    points_str = "・".join(points) if isinstance(points, list) else str(points)
-    return IMAGE_BASE_PROMPT.format(
-        title=info.get("title", ""),
-        scene=info.get("scene", ""),
-        points=points_str,
-    )
+def build_image_prompt(article_text: str) -> str:
+    return IMAGE_BASE_PROMPT.format(article_text=article_text)
 
 
 def generate_image(prompt: str) -> bytes:
@@ -187,23 +121,17 @@ def main():
     print("  画像生成フロー開始")
     print("=" * 40)
 
-    print("\n[1/4] 最新記事を読み込み中...")
+    print("\n[1/3] 最新記事を読み込み中...")
     article_path = find_latest_article()
     article_text = article_path.read_text(encoding="utf-8")
     print(f"  対象記事: {article_path.name}")
 
-    print("\n[2/4] Claude Codeで記事情報を抽出中...")
-    info = extract_article_info(article_text)
-    print(f"  タイトル : {info.get('title')}")
-    print(f"  シーン   : {info.get('scene')}")
-    print(f"  ポイント : {info.get('points')}")
-
-    print("\n[3/4] OpenAI gpt-image-1で画像を生成中...")
-    image_prompt = build_image_prompt(info)
+    print("\n[2/3] OpenAI gpt-image-1で画像を生成中...")
+    image_prompt = build_image_prompt(article_text)
     image_bytes = generate_image(image_prompt)
     print(f"  生成完了（{len(image_bytes):,} bytes）")
 
-    print("\n[4/4] 画像を保存中...")
+    print("\n[3/3] 画像を保存中...")
     out_path = save_image(article_path, image_bytes)
     print(f"  保存先: {out_path.relative_to(PROJECT_ROOT)}")
 
