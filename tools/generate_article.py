@@ -45,7 +45,9 @@ NOTION_BLOCK_LIMIT = 100
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
-GITHUB_ARTICLE_BASE = "https://github.com/tonkatsuphotos-creator/eyecare-labo/blob/main/articles"
+GITHUB_OWNER = os.environ.get("GITHUB_OWNER", "Rplus-shop")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "eyecare-labo")
+GITHUB_ARTICLE_BASE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/blob/main/articles"
 
 ARTICLE_FOOTER = """\
 ---

@@ -37,8 +37,10 @@ NOTION_API_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
 NOTION_BLOCK_LIMIT = 100
 
-GITHUB_ARTICLE_BASE = "https://github.com/tonkatsuphotos-creator/eyecare-labo/blob/main/articles"
-GITHUB_IMAGE_BASE = "https://raw.githubusercontent.com/tonkatsuphotos-creator/eyecare-labo/main/images"
+GITHUB_OWNER = os.environ.get("GITHUB_OWNER", "Rplus-shop")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "eyecare-labo")
+GITHUB_ARTICLE_BASE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/blob/main/articles"
+GITHUB_IMAGE_BASE = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/images"
 
 
 def to_github_article_url(filepath: str) -> str:
