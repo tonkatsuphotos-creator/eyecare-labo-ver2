@@ -47,6 +47,8 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_OWNER: ${{ secrets.GH_OWNER }}
+          GH_REPO: ${{ secrets.GH_REPO }}
         run: python tools/generate_article.py
 
       - name: 画像を生成
@@ -55,6 +57,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          GH_OWNER: ${{ secrets.GH_OWNER }}
+          GH_REPO: ${{ secrets.GH_REPO }}
         run: python tools/generate_image.py
 
       - name: 生成した記事・画像をコミット・プッシュ

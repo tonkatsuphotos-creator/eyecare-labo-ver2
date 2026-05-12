@@ -40,8 +40,8 @@ NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 NOTION_API_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
 
-GITHUB_OWNER = os.environ.get("GITHUB_OWNER", "Rplus-shop")
-GITHUB_REPO = os.environ.get("GITHUB_REPO", "eyecare-labo")
+GITHUB_OWNER = os.environ.get("GH_OWNER", "Rplus-shop")
+GITHUB_REPO = os.environ.get("GH_REPO", "eyecare-labo")
 GITHUB_ARTICLE_BASE = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/blob/main/articles"
 GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/images"
 
