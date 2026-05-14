@@ -2,8 +2,8 @@ name: 記事自動生成
 
 on:
   schedule:
-    # 2026-05-13 00:30 JST（= 2026-05-12 15:30 UTC）に1回だけ実行
-    - cron: '0 19 * * *'
+    # 毎月20日 09:00 JST（= 00:00 UTC）
+    - cron: '0 0 20 * *'
   # GitHub Actions画面から手動実行も可能
   workflow_dispatch:
 

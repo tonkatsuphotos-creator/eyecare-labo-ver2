@@ -74,15 +74,15 @@ def notion_headers() -> dict:
     }
 
 
-def fetch_next_stock() -> dict:
-    """ネタストックを並び順の昇順で1件取得する"""
+def fetch_next_stocks(n: int = 10) -> list:
+    """ネタストックを並び順の昇順でn件取得する"""
     resp = requests.post(
         f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query",
         headers=notion_headers(),
         json={
             "filter": {"property": "ステータス", "select": {"equals": "ネタストック"}},
             "sorts": [{"timestamp": "created_time", "direction": "ascending"}],
-            "page_size": 1,
+            "page_size": n,
         },
         timeout=10,
     )
@@ -90,7 +90,7 @@ def fetch_next_stock() -> dict:
     if not results:
         print("ネタストックの記事が見つかりません。終了します。")
         sys.exit(0)
-    return results[0]
+    return results
 
 
 def extract_props(page: dict) -> dict:
@@ -303,45 +303,49 @@ def save_article(title: str, content: str) -> str:
 
 def main():
     print("=" * 40)
-    print("  記事生成フロー開始")
+    print("  記事生成フロー開始（10件）")
     print("=" * 40)
 
-    # Step 1: Notionからネタストックを取得
-    print("\n[1/5] Notionからネタストックを取得中...")
-    page = fetch_next_stock()
-    meta = extract_props(page)
-    print(f"  タイトル   : {meta['title']}")
-    print(f"  カテゴリ   : {meta['category']}")
-    print(f"  切り口     : {meta['pattern']}")
-    print(f"  ターゲット : {meta['target']}")
+    # Step 1: Notionからネタストックを10件取得
+    print("\n[1/5] Notionからネタストックを10件取得中...")
+    pages = fetch_next_stocks(10)
+    print(f"  取得件数: {len(pages)}件")
 
-    # Step 2: Claude Codeで記事生成
-    print("\n[2/5] Claude Codeで記事を生成中...（最大10分）")
-    prompt = build_prompt(meta)
-    raw_output = generate_article_with_claude(prompt)
-    article_content = clean_output(raw_output) + "\n\n" + ARTICLE_FOOTER
-    print(f"  生成文字数 : {len(article_content)}字")
+    for idx, page in enumerate(pages, 1):
+        meta = extract_props(page)
+        print(f"\n{'='*40}")
+        print(f"  記事 {idx}/{len(pages)}: {meta['title']}")
+        print(f"{'='*40}")
+        print(f"  カテゴリ   : {meta['category']}")
+        print(f"  切り口     : {meta['pattern']}")
+        print(f"  ターゲット : {meta['target']}")
 
-    # Step 3: Markdownファイルに保存
-    print("\n[3/5] Markdownファイルを保存中...")
-    filepath = save_article(meta["title"], article_content)
-    print(f"  保存先     : {filepath}")
+        # Step 2: Claude Codeで記事生成
+        print(f"\n  [2/5] Claude Codeで記事を生成中...（最大10分）")
+        prompt = build_prompt(meta)
+        raw_output = generate_article_with_claude(prompt)
+        article_content = clean_output(raw_output) + "\n\n" + ARTICLE_FOOTER
+        print(f"  生成文字数 : {len(article_content)}字")
 
-    # Step 4: Notionページに本文を貼り付け
-    print("\n[4/5] Notionページに本文を貼り付け中...")
-    blocks = md_to_blocks(article_content)
-    append_blocks_to_page(meta["id"], blocks)
-    print(f"  ブロック数 : {len(blocks)}")
+        # Step 3: Markdownファイルに保存
+        print(f"\n  [3/5] Markdownファイルを保存中...")
+        filepath = save_article(meta["title"], article_content)
+        print(f"  保存先     : {filepath}")
 
-    # Step 5: ステータスを「生成済」に更新
-    print("\n[5/5] ステータスを「生成済」に更新中...")
-    update_notion_status_and_link(meta["id"], filepath)
+        # Step 4: Notionページに本文を貼り付け
+        print(f"\n  [4/5] Notionページに本文を貼り付け中...")
+        blocks = md_to_blocks(article_content)
+        append_blocks_to_page(meta["id"], blocks)
+        print(f"  ブロック数 : {len(blocks)}")
+
+        # Step 5: ステータスを「生成済」に更新
+        print(f"\n  [5/5] ステータスを「生成済」に更新中...")
+        update_notion_status_and_link(meta["id"], filepath)
+        print(f"  完了: {filepath}")
 
     print("\n" + "=" * 40)
-    print("  完了")
+    print(f"  全件完了（{len(pages)}本）")
     print("=" * 40)
-    print(f"  ファイル       : {filepath}")
-    print(f"  NotionページID : {meta['id']}")
 
 
 if __name__ == "__main__":

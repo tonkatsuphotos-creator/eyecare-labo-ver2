@@ -73,13 +73,13 @@ IMAGE_BASE_PROMPT = """\
 # ── 最新記事の取得 ────────────────────────────────────────
 
 
-def find_latest_article() -> Path:
-    """articlesフォルダから最終更新日時が最新のMarkdownファイルを返す"""
+def find_latest_articles(n: int = 10) -> list:
+    """articlesフォルダから最終更新日時が新しいMarkdownファイルをn件返す"""
     articles = sorted(ARTICLES_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     if not articles:
         print("[エラー] articles/ フォルダに記事が見つかりません。", file=sys.stderr)
         sys.exit(1)
-    return articles[0]
+    return articles[:n]
 
 
 # ── 画像生成 ──────────────────────────────────────────────
@@ -212,49 +212,56 @@ def save_image(article_path: Path, image_bytes: bytes) -> Path:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Notionへの書き込みをスキップして内容だけ表示する")
+    parser.add_argument("--count", type=int, default=10, help="処理する記事数（デフォルト: 10）")
     args = parser.parse_args()
 
     print("=" * 40)
-    print("  画像生成フロー開始")
+    print(f"  画像生成フロー開始（{args.count}件）")
     print("=" * 40)
 
-    print("\n[1/4] 最新記事を読み込み中...")
-    article_path = find_latest_article()
-    article_text = article_path.read_text(encoding="utf-8")
-    trimmed = trim_article_text(article_text)
-    print(f"  対象記事: {article_path.name}")
-    print(f"  本文文字数（定型文・免責文除外後）: {len(trimmed)} 字")
+    print(f"\n[準備] 最新{args.count}件の記事を検索中...")
+    article_paths = find_latest_articles(args.count)
+    print(f"  対象記事数: {len(article_paths)}件")
 
-    print("\n[2/4] OpenAI gpt-image-2で画像を生成中...")
-    image_prompt = build_image_prompt(article_text)
-    image_bytes = generate_image(image_prompt)
-    print(f"  生成完了（{len(image_bytes):,} bytes）")
+    for idx, article_path in enumerate(article_paths, 1):
+        print(f"\n{'='*40}")
+        print(f"  記事 {idx}/{len(article_paths)}: {article_path.name}")
+        print(f"{'='*40}")
 
-    print("\n[3/4] 画像を保存中...")
-    out_path = save_image(article_path, image_bytes)
-    print(f"  保存先: {out_path.relative_to(PROJECT_ROOT)}")
+        article_text = article_path.read_text(encoding="utf-8")
+        trimmed = trim_article_text(article_text)
+        print(f"  本文文字数（定型文・免責文除外後）: {len(trimmed)} 字")
 
-    print("\n[4/4] NotionページにGitHub画像URLを追記中...")
-    github_url = f"{GITHUB_RAW_BASE}/{out_path.name}"
-    if not NOTION_TOKEN or not NOTION_DATABASE_ID:
-        print("  [スキップ] NOTION_TOKEN または NOTION_DATABASE_ID が未設定です。")
-    else:
-        page_id = find_notion_page_by_article(article_path)
-        if page_id:
-            if args.dry_run:
-                print("  [DRY-RUN] Notionページへの書き込みをスキップ")
-                print(f"  [DRY-RUN] 対象ページID: {page_id}")
-                print(f"  [DRY-RUN] 画像URL: {github_url}")
-            else:
-                append_image_block_to_page(page_id, github_url)
-                update_image_url_property(page_id, github_url)
-                print(f"  GitHub URL : {github_url}")
-                print(f"  Notion ID  : {page_id}")
+        print(f"\n  [1/3] OpenAI gpt-image-2で画像を生成中...")
+        image_prompt = build_image_prompt(article_text)
+        image_bytes = generate_image(image_prompt)
+        print(f"  生成完了（{len(image_bytes):,} bytes）")
+
+        print(f"\n  [2/3] 画像を保存中...")
+        out_path = save_image(article_path, image_bytes)
+        print(f"  保存先: {out_path.relative_to(PROJECT_ROOT)}")
+
+        print(f"\n  [3/3] NotionページにGitHub画像URLを追記中...")
+        github_url = f"{GITHUB_RAW_BASE}/{out_path.name}"
+        if not NOTION_TOKEN or not NOTION_DATABASE_ID:
+            print("  [スキップ] NOTION_TOKEN または NOTION_DATABASE_ID が未設定です。")
         else:
-            print(f"  [警告] 対応するNotionページが見つかりませんでした。（記事: {article_path.name}）")
+            page_id = find_notion_page_by_article(article_path)
+            if page_id:
+                if args.dry_run:
+                    print("  [DRY-RUN] Notionページへの書き込みをスキップ")
+                    print(f"  [DRY-RUN] 対象ページID: {page_id}")
+                    print(f"  [DRY-RUN] 画像URL: {github_url}")
+                else:
+                    append_image_block_to_page(page_id, github_url)
+                    update_image_url_property(page_id, github_url)
+                    print(f"  GitHub URL : {github_url}")
+                    print(f"  Notion ID  : {page_id}")
+            else:
+                print(f"  [警告] 対応するNotionページが見つかりませんでした。（記事: {article_path.name}）")
 
     print("\n" + "=" * 40)
-    print("  完了")
+    print(f"  全件完了（{len(article_paths)}本）")
     print("=" * 40)
 
 
