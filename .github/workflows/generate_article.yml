@@ -52,6 +52,7 @@ jobs:
         run: python tools/generate_article.py
 
       - name: 画像を生成
+        timeout-minutes: 15
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -59,7 +60,7 @@ jobs:
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
           GH_OWNER: ${{ vars.GH_OWNER }}
           GH_REPO: ${{ vars.GH_REPO }}
-        run: python tools/generate_image.py
+        run: python tools/generate_image.py --count 5
 
       - name: 生成した記事・画像をコミット・プッシュ
         run: |

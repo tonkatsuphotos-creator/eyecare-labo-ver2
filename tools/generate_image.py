@@ -114,12 +114,12 @@ def build_image_prompt(article_text: str) -> str:
 
 def generate_image(prompt: str) -> bytes:
     """OpenAI gpt-image-2で画像を生成してバイナリで返す"""
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = OpenAI(api_key=OPENAI_API_KEY, timeout=90)
     response = client.images.generate(
         model="gpt-image-2",
         prompt=prompt,
         size=IMAGE_SIZE,
-        quality="high",
+        quality="medium",
         n=1,
     )
     image_data = response.data[0]
@@ -227,6 +227,11 @@ def main():
         print(f"\n{'='*40}")
         print(f"  記事 {idx}/{len(article_paths)}: {article_path.name}")
         print(f"{'='*40}")
+
+        out_path = IMAGES_DIR / f"{article_path.stem}.png"
+        if out_path.exists():
+            print(f"  [スキップ] 画像既存: {out_path.name}")
+            continue
 
         article_text = article_path.read_text(encoding="utf-8")
         trimmed = trim_article_text(article_text)
