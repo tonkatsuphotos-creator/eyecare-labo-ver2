@@ -149,7 +149,7 @@ def generate_topics_with_claude(prompt: str) -> list:
     """Anthropic APIでネタ10件を生成してリストで返す"""
     response = client.messages.create(
         model=CLAUDE_MODEL,
-        max_tokens=2048,
+        max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
     usage = response.usage
