@@ -308,7 +308,7 @@ def main():
 
     # Step 1: Notionからネタストックを10件取得
     print("\n[1/5] Notionからネタストックを10件取得中...")
-    pages = fetch_next_stocks(10)
+    pages = fetch_next_stocks(1)
     print(f"  取得件数: {len(pages)}件")
 
     for idx, page in enumerate(pages, 1):
