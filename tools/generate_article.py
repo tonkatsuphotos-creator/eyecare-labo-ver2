@@ -248,7 +248,7 @@ def generate_article_with_claude(prompt: str) -> str:
 
     try:
         result = subprocess.run(
-            ["claude", "-p", prompt],
+            ["claude", "--model", "sonnet", "-p", prompt],
             capture_output=True,
             text=True,
             timeout=600,
