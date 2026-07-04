@@ -7,7 +7,7 @@ Usage:
 
 フロー:
     1. NotionDBからステータス「ネタストック」の記事を並び順1位で取得
-    2. CLAUDE.md・references/を参照してClaude Codeで記事生成
+    2. CLAUDE.md・references/を参照してClaude APIで記事生成
     3. articles/フォルダにMarkdownで保存
     4. Notionページに記事本文を貼り付け
     5. ステータスを「生成済」に更新
@@ -15,12 +15,11 @@ Usage:
 
 import os
 import re
-import subprocess
 import sys
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import anthropic
 import requests
 
 try:
@@ -61,6 +60,9 @@ Belle四谷4F
 #PC疲れ #目のケア #血流改善 #四ツ谷 #新宿
 #四ツ谷サロン #駅近サロン #頭痛 #肩こり
 ---"""
+
+client = anthropic.Anthropic()  # ANTHROPIC_API_KEY を環境変数から自動取得
+CLAUDE_MODEL = "claude-sonnet-5"
 
 
 # ── Notion API ────────────────────────────────────────────
@@ -200,23 +202,15 @@ def md_to_blocks(content: str) -> list:
 # ── 記事生成 ──────────────────────────────────────────────
 
 
-def build_prompt(meta: dict) -> str:
+def build_system_blocks() -> list:
+    """CLAUDE.md・referencesなど、記事が変わっても不変の部分（キャッシュ対象）"""
     claude_md = (PROJECT_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     refs_text = ""
     for ref_file in sorted((PROJECT_ROOT / "references").glob("*.md")):
         content = ref_file.read_text(encoding="utf-8")
         refs_text += f"\n\n=== {ref_file.name} ===\n{content}"
 
-    current_month = datetime.now().strftime("%Y年%-m月")
-
-    return f"""以下の条件と参照ファイルをすべて守って、GBPコラム記事の本文のみを生成してください。
-
-## 今回の記事情報
-- 記事タイトル：{meta['title']}
-- テーマカテゴリ：{meta['category']}
-- 切り口パターン：{meta['pattern']}
-- ターゲット読者：{meta['target']}
-- 投稿月：{current_month}
+    static_text = f"""以下の条件と参照ファイルをすべて守って、GBPコラム記事の本文のみを生成してください。
 
 ## プロジェクトルール（CLAUDE.md）
 {claude_md}
@@ -235,48 +229,50 @@ def build_prompt(meta: dict) -> str:
 - 説明文・前置き・コメント・コードブロック記号（```）は一切出力しない
 - 冒頭の定型文から始め、末尾の免責文で終わること
 """
+    return [{
+        "type": "text",
+        "text": static_text,
+        "cache_control": {"type": "ephemeral", "ttl": "1h"},
+    }]
 
 
-def generate_article_with_claude(prompt: str) -> str:
-    """Claude Code CLIを使って記事を生成する"""
-    # 長いプロンプトをtmpファイル経由で渡す
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".txt", encoding="utf-8", delete=False
-    ) as f:
-        f.write(prompt)
-        tmp_path = f.name
+def generate_article_with_claude(system_blocks: list, meta: dict) -> str:
+    """Anthropic APIを使って記事を生成する（記事ごとに変わる部分のみ送信）"""
+    current_month = datetime.now().strftime("%Y年%-m月")
+    user_prompt = f"""## 今回の記事情報
+- 記事タイトル：{meta['title']}
+- テーマカテゴリ：{meta['category']}
+- 切り口パターン：{meta['pattern']}
+- ターゲット読者：{meta['target']}
+- 投稿月：{current_month}
+"""
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=4096,
+        system=system_blocks,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    usage = response.usage
+    cache_read = getattr(usage, "cache_read_input_tokens", 0)
+    cache_write = getattr(usage, "cache_creation_input_tokens", 0)
+    print(f"  [トークン] input={usage.input_tokens} "
+          f"cache_read={cache_read} cache_write={cache_write} "
+          f"output={usage.output_tokens}")
 
-    try:
-        result = subprocess.run(
-            ["claude", "--model", "sonnet", "-p", prompt],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
-
-    if result.returncode != 0:
-        print(f"[エラー] Claude Code実行失敗:\n{result.stderr}", file=sys.stderr)
-        sys.exit(1)
-
-    return result.stdout.strip()
+    return "".join(b.text for b in response.content if b.type == "text").strip()
 
 
 def clean_output(text: str) -> str:
     """Claude出力から記事本文のみを抽出する。
     冒頭定型文から始まり、末尾免責文で終わる範囲を切り出す。
     """
-    # コードブロック記号を除去
     text = re.sub(r"```[^\n]*\n?", "", text)
 
-    # 冒頭定型文の開始位置を特定して以前を切り捨て
     start_marker = "こんにちは！新宿区"
     start_idx = text.find(start_marker)
     if start_idx != -1:
         text = text[start_idx:]
 
-    # 末尾免責文の末尾を特定してそれ以降を切り捨て
     end_marker = "専門家や医師の診断を受けてください。"
     end_idx = text.find(end_marker)
     if end_idx != -1:
@@ -308,8 +304,11 @@ def main():
 
     # Step 1: Notionからネタストックを10件取得
     print("\n[1/5] Notionからネタストックを10件取得中...")
-    pages = fetch_next_stocks(1)
+    pages = fetch_next_stocks(10)
     print(f"  取得件数: {len(pages)}件")
+
+    # CLAUDE.md・referencesは記事間で不変のため、ループの外で1回だけ構築（キャッシュ再利用のため）
+    system_blocks = build_system_blocks()
 
     for idx, page in enumerate(pages, 1):
         meta = extract_props(page)
@@ -320,10 +319,9 @@ def main():
         print(f"  切り口     : {meta['pattern']}")
         print(f"  ターゲット : {meta['target']}")
 
-        # Step 2: Claude Codeで記事生成
-        print(f"\n  [2/5] Claude Codeで記事を生成中...（最大10分）")
-        prompt = build_prompt(meta)
-        raw_output = generate_article_with_claude(prompt)
+        # Step 2: Claude APIで記事生成
+        print(f"\n  [2/5] Claude APIで記事を生成中...")
+        raw_output = generate_article_with_claude(system_blocks, meta)
         article_content = clean_output(raw_output) + "\n\n" + ARTICLE_FOOTER
         print(f"  生成文字数 : {len(article_content)}字")
 
