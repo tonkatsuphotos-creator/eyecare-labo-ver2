@@ -92,6 +92,7 @@ def register_topic(title: str, category: str, pattern: str, target: str) -> str:
                 "テーマカテゴリ": {"select": {"name": category}},
                 "切り口パターン": {"select": {"name": pattern}},
                 "ターゲット読者": {"select": {"name": target}},
+                "作成日": {"date": {"start": datetime.now().strftime("%Y-%m-%d")}},  # ← 追加
             },
         },
         timeout=10,
